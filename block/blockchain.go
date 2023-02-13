@@ -1,12 +1,15 @@
-package main
+package block
 
 import (
+	"crypto/ecdsa"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
 	"time"
+
+	"github.com/Big0ak/blockchain/utils"
 )
 
 const (
@@ -104,9 +107,36 @@ func (bc *Blockchain) Print() {
 	fmt.Printf("%s\n", strings.Repeat("=", 59))
 }
 
-func (bc *Blockchain) AddTransaction(sender, recipient string, value float32) {
+// Добавление транзакций в пул
+func (bc *Blockchain) AddTransaction(sender, recipient string, value float32,
+	senderPublicKey *ecdsa.PublicKey, s *utils.Signature) bool {
 	t := NewTransaction(sender, recipient, value)
-	bc.transactionPool = append(bc.transactionPool, t)
+
+	// Если это транзакция вознаграждение майнера
+	if sender == MINING_SENDER {
+		bc.transactionPool = append(bc.transactionPool, t)
+		return true
+	}
+
+	if bc.VerifyTransactionSignature(senderPublicKey, s, t) {
+		// if bc.CalculateTotalAmount(sender) < value {
+		// 	log.Print("ERROR: Not enough balance in a wallet")
+		// 	return false
+		// }
+		bc.transactionPool = append(bc.transactionPool, t)
+		return true
+	} else {	
+		log.Println("ERROR: Verify Transaction")
+	}
+	return false
+}
+
+// Проверка транзакции на подпись
+func (bc *Blockchain) VerifyTransactionSignature(
+	senderPublickKey *ecdsa.PublicKey, s *utils.Signature, t *Transaction) bool {
+	m, _ := json.Marshal(t)
+	h := sha256.Sum256([]byte(m))
+	return ecdsa.Verify(senderPublickKey, h[:], s.R, s.S)	
 }
 
 // Копировние пула транзакций
@@ -122,7 +152,7 @@ func (bc *Blockchain) CopyTransactionPool() []*Transaction {
 // Проверка блока.
 // Необходимые данные для проверки: nonce, хэш предыдущей транзакции, все транзакции для этого блока
 func (bc *Blockchain) ValidProof(nonce int, previousHash [32]byte, transactions []*Transaction, difficulty int) bool {
-	zeros := strings.Repeat("0", difficulty)
+	zeros := strings.Repeat("0", difficulty) // возможно сделать константой
 	guessBlock := Block{0, nonce, previousHash, transactions}
 	guessHashStr := fmt.Sprintf("%x", guessBlock.Hash())
 	return guessHashStr[:difficulty] == zeros
@@ -139,7 +169,8 @@ func (bc *Blockchain) ProofOfWork() int {
 }
 
 func (bc *Blockchain) Mining() bool {
-	bc.AddTransaction(MINING_SENDER, bc.blockchainAdress, MINING_REWARD)
+	// транзакция о вознаграждении майнера
+	bc.AddTransaction(MINING_SENDER, bc.blockchainAdress, MINING_REWARD, nil, nil)
 	nonce := bc.ProofOfWork()
 	previousHash := bc.LastBlock().Hash()
 	bc.CreatBlock(nonce, previousHash)
@@ -176,7 +207,11 @@ type Transaction struct {
 }
 
 func NewTransaction(sender, recipient string, value float32) *Transaction {
-	return &Transaction{sender, recipient, value}
+	return &Transaction{
+		senderBlockchainAddress: sender,
+		recipientBlockchainAdress: recipient,
+		value: value,
+	}
 }
 
 func (t *Transaction) Print() {
@@ -197,27 +232,4 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		Recipient: t.recipientBlockchainAdress,
 		Value:     t.value,
 	})
-}
-
-func init() {
-	log.SetPrefix("Blockchain: ")
-}
-
-func main() {
-	myAdress := "my_Adress"
-	blockchain := NewBlockhain(myAdress)
-	blockchain.Print()
-
-	blockchain.AddTransaction("A", "B", 1.0)
-	blockchain.Mining()
-	blockchain.Print()
-
-	blockchain.AddTransaction("C", "D", 2.0)
-	blockchain.AddTransaction("X", "Y", 3.0)
-	blockchain.Mining()
-	blockchain.Print()
-
-	fmt.Printf("my_Adress %.1f\n", blockchain.CalculateTotalAmount(myAdress))
-	fmt.Printf("C %.1f\n", blockchain.CalculateTotalAmount("C"))
-	fmt.Printf("B %.1f\n", blockchain.CalculateTotalAmount("B"))
 }
