@@ -58,12 +58,12 @@ func (b *Block) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
 		Timestamp    int64          `json:"timestamp"`
 		Nonce        int            `json:"nonce"`
-		PreviousHash [32]byte       `json:"previous_hash"`
+		PreviousHash string         `json:"previous_hash"`
 		Transactions []*Transaction `json:"transactions"`
 	}{
 		Timestamp:    b.timestamp,
 		Nonce:        b.nonce,
-		PreviousHash: b.previousHash,
+		PreviousHash: fmt.Sprintf("%x", b.previousHash),
 		Transactions: b.transactions,
 	})
 }
@@ -73,17 +73,27 @@ func (b *Block) MarshalJSON() ([]byte, error) {
 // ----------------------------------------------------------------------------------------- //
 
 type Blockchain struct {
-	transactionPool []*Transaction
-	chain           []*Block
+	transactionPool  []*Transaction
+	chain            []*Block
 	blockchainAdress string
+	port             uint16
 }
 
-func NewBlockhain(blockchainAdress string) *Blockchain {
+func NewBlockhain(blockchainAdress string, port uint16) *Blockchain {
 	b := &Block{}
 	bc := new(Blockchain)
 	bc.CreatBlock(0, b.Hash())
 	bc.blockchainAdress = blockchainAdress
+	bc.port = port
 	return bc
+}
+
+func (bc *Blockchain) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Blocks []*Block `json:"chains"`
+	}{
+		Blocks: bc.chain,
+	})
 }
 
 func (bc *Blockchain) CreatBlock(nonce int, previousHash [32]byte) *Block {
@@ -125,7 +135,7 @@ func (bc *Blockchain) AddTransaction(sender, recipient string, value float32,
 		// }
 		bc.transactionPool = append(bc.transactionPool, t)
 		return true
-	} else {	
+	} else {
 		log.Println("ERROR: Verify Transaction")
 	}
 	return false
@@ -136,7 +146,7 @@ func (bc *Blockchain) VerifyTransactionSignature(
 	senderPublickKey *ecdsa.PublicKey, s *utils.Signature, t *Transaction) bool {
 	m, _ := json.Marshal(t)
 	h := sha256.Sum256([]byte(m))
-	return ecdsa.Verify(senderPublickKey, h[:], s.R, s.S)	
+	return ecdsa.Verify(senderPublickKey, h[:], s.R, s.S)
 }
 
 // Копировние пула транзакций
@@ -208,9 +218,9 @@ type Transaction struct {
 
 func NewTransaction(sender, recipient string, value float32) *Transaction {
 	return &Transaction{
-		senderBlockchainAddress: sender,
+		senderBlockchainAddress:   sender,
 		recipientBlockchainAdress: recipient,
-		value: value,
+		value:                     value,
 	}
 }
 

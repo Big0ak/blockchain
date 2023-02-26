@@ -84,8 +84,20 @@ func (w *Wallet) PublicKeyStr() string {
 	return fmt.Sprintf("%x%x", w.PublicKey().X.Bytes(), w.publicKey.Y.Bytes())
 }
 
-func (w *Wallet) BlockchainAdress() string {
+func (w *Wallet) BlockchainAddress() string {
 	return w.blockchainAdress
+}
+
+func (w *Wallet) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		PrivateKey        string `json:"private_key"`
+		PublicKey         string `json:"public_key"`
+		BlockchainAddress string `json:"blockchain_address"`
+	}{
+		PrivateKey:        w.PrivateKeyStr(),
+		PublicKey:         w.PublicKeyStr(),
+		BlockchainAddress: w.BlockchainAddress(),
+	})
 }
 
 // ----------------------------------------------------------------------------------------- //
