@@ -243,3 +243,25 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		Value:     t.value,
 	})
 }
+
+// ----------------------------------------------------------------------------------------- //
+// ---------------------------------- Transaction Request ---------------------------------- //
+// ----------------------------------------------------------------------------------------- //
+
+// транзакция отправленная от backend wallet to blockchain server
+type TransactionRequest struct {
+	SenderBlockchainAddress    *string `json:"sender_blockchain_address"`
+	RecipientBlockchainAddress *string `json:"recipient_blockchain_address"`
+	SenderPublickKey           *string `json:"sender_public_key"`
+	Value                      *float32 `json:"value"`
+	Signature                  *string `json:"signature"`
+}
+
+func (tr *TransactionRequest) Validate() bool {
+	if tr.Signature == nil || tr.SenderBlockchainAddress == nil ||
+		tr.RecipientBlockchainAddress == nil || tr.SenderPublickKey == nil ||
+		tr.Value == nil {
+		return false
+	}
+	return true
+}
