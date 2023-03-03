@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Big0ak/blockchain/utils"
@@ -16,6 +17,7 @@ const (
 	MINING_DIFFICULTY = 3 // Количество нулей в хэш функции
 	MINING_SENDER     = "THE BLOCKCHAIN"
 	MINING_REWARD     = 1.0
+	MINING_TIMER_SEC  = 20 // 20 сек. майнится новый блок
 )
 
 // ----------------------------------------------------------------------------------------- //
@@ -77,6 +79,7 @@ type Blockchain struct {
 	chain            []*Block
 	blockchainAdress string
 	port             uint16
+	mux 			 sync.Mutex
 }
 
 func NewBlockhain(blockchainAdress string, port uint16) *Blockchain {
@@ -86,6 +89,10 @@ func NewBlockhain(blockchainAdress string, port uint16) *Blockchain {
 	bc.blockchainAdress = blockchainAdress
 	bc.port = port
 	return bc
+}
+
+func (bc *Blockchain) TransactionPool() []*Transaction {
+	return bc.transactionPool
 }
 
 func (bc *Blockchain) MarshalJSON() ([]byte, error) {
@@ -115,6 +122,14 @@ func (bc *Blockchain) Print() {
 		block.Print()
 	}
 	fmt.Printf("%s\n", strings.Repeat("=", 59))
+}
+
+func (bc *Blockchain) CreatTransaction(sender, recipient string, value float32,
+	senderPublicKey *ecdsa.PublicKey, s *utils.Signature) bool {
+	isTransacted := bc.AddTransaction(sender, recipient, value, senderPublicKey, s)
+	// TODO
+	// обработка транзакций другими серверами
+	return isTransacted
 }
 
 // Добавление транзакций в пул
@@ -179,6 +194,16 @@ func (bc *Blockchain) ProofOfWork() int {
 }
 
 func (bc *Blockchain) Mining() bool {
+	bc.mux.Lock() // Блокируется
+	// Предполагается, что майнинг закончится черзе 20 сек
+	// Но если не так, то переходим к следующему майнингу блока потому что есть Lock()
+
+	defer bc.mux.Unlock()
+
+	if len(bc.transactionPool) == 0 {
+		return false
+	}
+
 	// транзакция о вознаграждении майнера
 	bc.AddTransaction(MINING_SENDER, bc.blockchainAdress, MINING_REWARD, nil, nil)
 	nonce := bc.ProofOfWork()
@@ -186,6 +211,14 @@ func (bc *Blockchain) Mining() bool {
 	bc.CreatBlock(nonce, previousHash)
 	log.Println("action=mining, status=success")
 	return true
+}
+
+// Выполняется первая 
+func (bc *Blockchain) StartMining() {
+	bc.Mining()
+	// Если майнинг закончится быстрее чем 20 секунд,
+	// то через 20 секунд будет запущен новый майнинг блока с помощью этой функции
+	_ = time.AfterFunc(time.Second * MINING_TIMER_SEC, bc.StartMining)
 }
 
 func (bc *Blockchain) CalculateTotalAmount(blockchainAdress string) float32 {
@@ -250,11 +283,11 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 
 // транзакция отправленная от backend wallet to blockchain server
 type TransactionRequest struct {
-	SenderBlockchainAddress    *string `json:"sender_blockchain_address"`
-	RecipientBlockchainAddress *string `json:"recipient_blockchain_address"`
-	SenderPublickKey           *string `json:"sender_public_key"`
+	SenderBlockchainAddress    *string  `json:"sender_blockchain_address"`
+	RecipientBlockchainAddress *string  `json:"recipient_blockchain_address"`
+	SenderPublickKey           *string  `json:"sender_public_key"`
 	Value                      *float32 `json:"value"`
-	Signature                  *string `json:"signature"`
+	Signature                  *string  `json:"signature"`
 }
 
 func (tr *TransactionRequest) Validate() bool {
@@ -265,3 +298,15 @@ func (tr *TransactionRequest) Validate() bool {
 	}
 	return true
 }
+
+type AmountResponse struct {
+	Amount float32 `json:"amount"`
+}
+
+func (ar *AmountResponse) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Amount float32 `json:"amount"`
+	}{
+		Amount: ar.Amount,
+	})
+}	
