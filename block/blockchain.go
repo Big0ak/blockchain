@@ -18,6 +18,12 @@ const (
 	MINING_SENDER     = "THE BLOCKCHAIN"
 	MINING_REWARD     = 1.0
 	MINING_TIMER_SEC  = 20 // 20 сек. майнится новый блок
+
+	BLOCKCHAIN_PORT_RANGE_START       = 5000
+	BLOCKCHAIN_PORT_RANGE_END         = 5003
+	NEIGHBOR_IP_RANGE_START           = 0
+	NEIGHBOR_IP_RANGE_END             = 1
+	BLOCKCHAIN_NEIGHBOR_SYNC_TIME_SEC = 20 // проверять кадые 20 сек. подлючение blockchain Node
 )
 
 // ----------------------------------------------------------------------------------------- //
@@ -79,7 +85,10 @@ type Blockchain struct {
 	chain            []*Block
 	blockchainAdress string
 	port             uint16
-	mux 			 sync.Mutex
+	mux              sync.Mutex
+
+	neighbors    []string
+	muxNeighbors sync.Mutex
 }
 
 func NewBlockhain(blockchainAdress string, port uint16) *Blockchain {
@@ -90,6 +99,32 @@ func NewBlockhain(blockchainAdress string, port uint16) *Blockchain {
 	bc.port = port
 	return bc
 }
+
+// ------------ Работа с Node --------------------
+func (bc *Blockchain) Run() {
+	bc.StartSyncNeighbors()
+}
+
+// Поиск подлюченных Node
+func (bc *Blockchain) SetNeighbors() {
+	bc.neighbors = utils.FindNeighbors(
+		"127.0.0.1", NEIGHBOR_IP_RANGE_START, NEIGHBOR_IP_RANGE_END,
+		bc.port, BLOCKCHAIN_PORT_RANGE_START, BLOCKCHAIN_PORT_RANGE_END)
+	log.Printf("%v", bc.neighbors)
+}
+
+func (bc *Blockchain) SyncNeighbors() {
+	bc.muxNeighbors.Lock()
+	defer bc.muxNeighbors.Unlock()
+	bc.SetNeighbors()
+}
+
+// Проверка каждые 20 секунд какие Node подключены
+func (bc * Blockchain) StartSyncNeighbors() {
+	bc.SyncNeighbors()
+	_ = time.AfterFunc(time.Second * BLOCKCHAIN_NEIGHBOR_SYNC_TIME_SEC, bc.StartSyncNeighbors)
+}
+// ----------------------------------------------
 
 func (bc *Blockchain) TransactionPool() []*Transaction {
 	return bc.transactionPool
@@ -213,12 +248,12 @@ func (bc *Blockchain) Mining() bool {
 	return true
 }
 
-// Выполняется первая 
+// Выполняется первая (Для майнинга)
 func (bc *Blockchain) StartMining() {
 	bc.Mining()
 	// Если майнинг закончится быстрее чем 20 секунд,
 	// то через 20 секунд будет запущен новый майнинг блока с помощью этой функции
-	_ = time.AfterFunc(time.Second * MINING_TIMER_SEC, bc.StartMining)
+	_ = time.AfterFunc(time.Second*MINING_TIMER_SEC, bc.StartMining)
 }
 
 func (bc *Blockchain) CalculateTotalAmount(blockchainAdress string) float32 {
@@ -299,6 +334,11 @@ func (tr *TransactionRequest) Validate() bool {
 	return true
 }
 
+// ----------------------------------------------------------------------------------------- //
+// ---------------------------------- Amount Response -------------------------------------- //
+// ----------------------------------------------------------------------------------------- //
+
+// Для получение баланса кошелька
 type AmountResponse struct {
 	Amount float32 `json:"amount"`
 }
@@ -309,4 +349,4 @@ func (ar *AmountResponse) MarshalJSON() ([]byte, error) {
 	}{
 		Amount: ar.Amount,
 	})
-}	
+}
