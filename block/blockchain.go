@@ -145,6 +145,8 @@ func (bc *Blockchain) Run() {
 	bc.StartSyncNeighbors()
 	// Перед запуском нового узла на него загружается блокчейн, который сейчас используется
 	bc.ResolveConflicts()
+	// Автоматический старт майнинга
+	bc.StartMining()
 }
 
 // Поиск подлюченных Node
@@ -261,11 +263,11 @@ func (bc *Blockchain) AddTransaction(sender, recipient string, value float32,
 	}
 
 	if bc.VerifyTransactionSignature(senderPublicKey, s, t) {
-		// Если отрицательный баланс
-		// if bc.CalculateTotalAmount(sender) < value {
-		// 	log.Print("ERROR: Not enough balance in a wallet")
-		// 	return false
-		// }
+		// Если недостаточный баланс, то не можем отправить
+		if bc.CalculateTotalAmount(sender) < value {
+			log.Print("ERROR: Not enough balance in a wallet")
+			return false
+		}
 		bc.transactionPool = append(bc.transactionPool, t)
 		return true
 	} else {
@@ -318,9 +320,10 @@ func (bc *Blockchain) Mining() bool {
 
 	defer bc.mux.Unlock()
 
-	if len(bc.transactionPool) == 0 {
-		return false
-	}
+	// (Для тестовой сети) Если нет транзакций в блоке, то не запускать майнинг
+	// if len(bc.transactionPool) == 0 {
+	// 	return false
+	// }
 
 	// транзакция о вознаграждении майнера
 	bc.AddTransaction(MINING_SENDER, bc.blockchainAdress, MINING_REWARD, nil, nil)

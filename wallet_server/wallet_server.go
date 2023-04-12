@@ -46,7 +46,7 @@ func (ws *WalletServer) Index(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-// Создание нового кошелька и отпрака из клиенту
+// Создание нового кошелька и отпрака его клиенту
 func (ws *WalletServer) Wallet(w http.ResponseWriter, req *http.Request) {
 	switch req.Method {
 	case http.MethodPost:
